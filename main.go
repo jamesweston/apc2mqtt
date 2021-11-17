@@ -14,6 +14,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var version = "unknown"
+
 // OIDs of interest.
 // snmptranslate -m PowerNet-MIB -Pu -Tso | less
 const (
@@ -200,6 +202,7 @@ func spawnTarget(target targetConfig, mqttClient mqtt.Client) {
 func main() {
 	var configpath = flag.String("conf", "config.toml", "Path to toml config file")
 	flag.Parse()
+	log.Infof("Starting version %s", version)
 	conf, err := parseConfig(*configpath)
 	check(err)
 
