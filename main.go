@@ -34,6 +34,7 @@ type targetConfig struct {
 type config struct {
 	MQTT struct {
 		Host string
+		Port uint16
 	}
 	Targets []targetConfig
 }
@@ -206,7 +207,9 @@ func main() {
 	conf, err := parseConfig(*configpath)
 	check(err)
 
-	mqttOpts := mqtt.NewClientOptions().AddBroker(fmt.Sprintf("tcp://%s:1883", conf.MQTT.Host)).SetClientID("apc2mqtt")
+	mqttOpts := mqtt.NewClientOptions().AddBroker(
+		fmt.Sprintf("tcp://%s:%d", conf.MQTT.Host, conf.MQTT.Port),
+	).SetClientID("apc2mqtt")
 	mqttClient := mqtt.NewClient(mqttOpts)
 	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
