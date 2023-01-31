@@ -2,10 +2,18 @@
   description = "Samw's APC PDU MQTT bridge";
 
   inputs.flake-utils.url = "github:numtide/flake-utils";
+  inputs.devshell = {
+    url = "github:numtide/devshell";
+    inputs.flake-utils.follows = "flake-utils";
+  };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils, devshell }:
     flake-utils.lib.eachDefaultSystem (system:
-      let pkgs = import nixpkgs { inherit system; };
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ devshell.overlay ];
+        };
       in rec {
         packages.apc2mqtt = pkgs.buildGoModule {
           name = "apc2mqtt";
@@ -16,5 +24,7 @@
           '';
         };
         defaultPackage = packages.apc2mqtt;
+        devShell =
+          pkgs.devshell.mkShell { packages = with pkgs; [ go gopls mosquitto ]; };
       });
 }
