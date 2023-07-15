@@ -5,6 +5,7 @@
   inputs.devshell = {
     url = "github:numtide/devshell";
     inputs.flake-utils.follows = "flake-utils";
+    inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { self, nixpkgs, flake-utils, devshell }:
