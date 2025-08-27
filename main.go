@@ -28,8 +28,16 @@ const (
 )
 
 type targetConfig struct {
-	Host string
-	Port uint16
+	Host           string
+	Port           uint16
+	Version        gosnmp.SnmpVersion
+	Community      string
+	Username       string
+	MsgFlags       gosnmp.SnmpV3MsgFlags
+	AuthPassphrase string
+	PrivPassphrase string
+	AuthProtocol   gosnmp.SnmpV3AuthProtocol
+	PrivProtocol   gosnmp.SnmpV3PrivProtocol
 }
 
 type config struct {
@@ -113,22 +121,30 @@ func getPDUState(snmp *gosnmp.GoSNMP) (*PDUState, error) {
 	return &state, nil
 }
 
-func runSNMP(host string, port uint16, stateCh chan PDUState, commandCh chan PDUCommand) {
+func runSNMP(target targetConfig, stateCh chan PDUState, commandCh chan PDUCommand) {
 	snmp := &gosnmp.GoSNMP{
-		Target:    host,
-		Port:      port,
-		Timeout:   time.Duration(2) * time.Second,
-		Transport: "udp",
-		Community: "private",
-		Version:   gosnmp.Version1,
-		Retries:   3,
+		Target:        target.Host,
+		Port:          target.Port,
+		Timeout:       time.Duration(2) * time.Second,
+		Transport:     "udp",
+		Community:     target.Community,
+		Version:       target.Version,
+		SecurityModel: gosnmp.UserSecurityModel,
+		MsgFlags:      target.MsgFlags,
+		Retries:       3,
+		SecurityParameters: &gosnmp.UsmSecurityParameters{UserName: target.Username,
+			AuthenticationProtocol:   target.AuthProtocol,
+			AuthenticationPassphrase: target.AuthPassphrase,
+			PrivacyProtocol:          target.PrivProtocol,
+			PrivacyPassphrase:        target.PrivPassphrase,
+		},
 	}
 	// Connect loop
 connect_loop:
 	for {
 		log.Info("Opening SNMP connection")
 		if err := snmp.Connect(); err != nil {
-			log.Warnf("Error connecting SNMP target %s: `%s`. Sleeping...", host, err.Error())
+			log.Warnf("Error connecting SNMP target %s: `%s`. Sleeping...", target.Host, err.Error())
 			time.Sleep(time.Second * 5)
 			continue // Try again
 		}
@@ -195,7 +211,7 @@ func spawnTarget(target targetConfig, mqttClient mqtt.Client) {
 	commandCh := make(chan PDUCommand)
 	var lastState PDUState
 
-	go runSNMP(target.Host, target.Port, stateCh, commandCh)
+	go runSNMP(target, stateCh, commandCh)
 
 	for state := range stateCh {
 		// Publish load to MQTT
