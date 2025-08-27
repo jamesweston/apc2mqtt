@@ -6,6 +6,7 @@ Uses [MQTT Discovery][mqttdisco] to automatically configure entities and devices
 
 Tested and working with:
 - AP7921
+- AP7920
 
 [mqttdisco]: https://www.home-assistant.io/docs/mqtt/discovery/
 [hass]: https://www.home-assistant.io/
