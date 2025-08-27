@@ -24,6 +24,7 @@ const (
 	sPDUOutletCtl           = ".1.3.6.1.4.1.318.1.1.4.4.2.1.3"
 	sPDUIdentSerialNumber   = ".1.3.6.1.4.1.318.1.1.4.1.5.0"
 	sPDUIdentModelNumber    = ".1.3.6.1.4.1.318.1.1.4.1.4.0"
+	sPDULoad                = ".1.3.6.1.4.1.318.1.1.12.2.3.1.1.2.1"
 )
 
 type targetConfig struct {
@@ -70,6 +71,7 @@ type PDUState struct {
 	Name    string
 	Serial  string
 	Model   string
+	Load    float64
 	Outlets []Outlet
 }
 
@@ -79,7 +81,7 @@ type PDUCommand struct {
 }
 
 func getPDUState(snmp *gosnmp.GoSNMP) (*PDUState, error) {
-	res, err := snmp.Get([]string{sPDUMasterConfigPDUName, sPDUIdentSerialNumber, sPDUIdentModelNumber})
+	res, err := snmp.Get([]string{sPDUMasterConfigPDUName, sPDUIdentSerialNumber, sPDUIdentModelNumber, sPDULoad})
 	if err != nil {
 		return nil, fmt.Errorf("get PDU info: %w", err)
 	}
@@ -87,6 +89,7 @@ func getPDUState(snmp *gosnmp.GoSNMP) (*PDUState, error) {
 		Name:   string(res.Variables[0].Value.([]byte)),
 		Serial: string(res.Variables[1].Value.([]byte)),
 		Model:  string(res.Variables[2].Value.([]byte)),
+		Load:   float64(res.Variables[3].Value.(uint)) / 10.0,
 	}
 
 	outletNames, err := snmp.WalkAll(sPDUOutletName)
@@ -178,6 +181,15 @@ type HassSwitchConfig struct {
 	Device       HassDeviceConfig `json:"device"`
 }
 
+type HassSensorConfig struct {
+	Name          string           `json:"name"`
+	StateTopic    string           `json:"state_topic"`
+	UniqueId      string           `json:"unique_id"`
+	UnitOfMeasure string           `json:"unit_of_measurement"`
+	DeviceClass   string           `json:"device_class"`
+	Device        HassDeviceConfig `json:"device"`
+}
+
 func spawnTarget(target targetConfig, mqttClient mqtt.Client) {
 	stateCh := make(chan PDUState)
 	commandCh := make(chan PDUCommand)
@@ -186,6 +198,30 @@ func spawnTarget(target targetConfig, mqttClient mqtt.Client) {
 	go runSNMP(target.Host, target.Port, stateCh, commandCh)
 
 	for state := range stateCh {
+		// Publish load to MQTT
+		loadTopic := fmt.Sprintf("homeassistant/sensor/apc_%s/load", strings.ToLower(state.Serial))
+
+		if lastState.Load != state.Load {
+			mqttClient.Publish(loadTopic+"/state", 0, false, fmt.Sprintf("%.1f", state.Load))
+		}
+		if len(lastState.Outlets) == 0 {
+			// Configure load sensor in Home Assistant
+			hsc, err := json.Marshal(HassSensorConfig{
+				Name:          "Load",
+				StateTopic:    loadTopic + "/state",
+				UniqueId:      fmt.Sprintf("apc_%s_load", strings.ToLower(state.Serial)),
+				UnitOfMeasure: "A", // Assuming the load is in watts
+				DeviceClass:   "current",
+				Device: HassDeviceConfig{
+					Name:         state.Name,
+					Identifiers:  state.Serial,
+					Model:        state.Model,
+					Manufacturer: "APC",
+				},
+			})
+			check(err)
+			mqttClient.Publish(loadTopic+"/config", 0, false, hsc)
+		}
 		for i, outlet := range state.Outlets {
 			uid := fmt.Sprintf("apc_%s_%d", strings.ToLower(state.Serial), i)
 			topicBase := fmt.Sprintf("homeassistant/switch/%s/", uid)
