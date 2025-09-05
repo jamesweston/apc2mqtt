@@ -236,7 +236,7 @@ func spawnTarget(target targetConfig, mqttClient mqtt.Client) {
 				},
 			})
 			check(err)
-			mqttClient.Publish(loadTopic+"/config", 0, false, hsc)
+			mqttClient.Publish(loadTopic+"/config", 0, true, hsc)
 		}
 		for i, outlet := range state.Outlets {
 			uid := fmt.Sprintf("apc_%s_%d", strings.ToLower(state.Serial), i)
@@ -256,7 +256,7 @@ func spawnTarget(target targetConfig, mqttClient mqtt.Client) {
 					},
 				})
 				check(err)
-				mqttClient.Publish(topicBase+"config", 0, false, hsc)
+				mqttClient.Publish(topicBase+"config", 0, true, hsc)
 			}
 			if len(lastState.Outlets) == 0 {
 				// First time we've got a state, so subscribe to mqtt topic
